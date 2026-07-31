@@ -15,7 +15,7 @@
       <h2 id="source-title">先确定识别范围</h2>
       <div class="source-mode">
         <span class="mode-label">外框模式</span>
-        <span>选中 1 个闭合外框和全部分割线</span>
+        <span>只需点击闭合外框，自动读取本页直线</span>
       </div>
       <div class="source-mode">
         <span class="mode-label">线网模式</span>
@@ -91,13 +91,13 @@
           <span class="recommended">推荐</span>
         </div>
         <ol class="mini-steps">
-          <li>显示浅色候选区域</li>
-          <li>到幻灯片中点击区域内部，按 Ctrl 可多选</li>
-          <li>返回任务窗格应用填充</li>
+          <li>点击“开始点选”，显示浅色候选区域</li>
+          <li>直接逐个点击区域，无需按 Ctrl</li>
+          <li>已选区域会加深，再点一次可取消</li>
         </ol>
         <div class="manual-actions">
-          <button id="prepare" class="secondary">显示候选区域</button>
-          <button id="generateSelected" class="primary">填充已选候选区域</button>
+          <button id="prepare" class="secondary">1. 开始点选</button>
+          <button id="generateSelected" class="primary">2. 完成并填充</button>
         </div>
       </article>
 
@@ -130,13 +130,15 @@
       <ul>
         <li>当前版本面向 WPS 演示桌面版。</li>
         <li>支持矩形、圆角矩形、椭圆、常用多边形和已闭合自由形状作为外框。</li>
+        <li>外框模式只需选中外框，插件会自动读取当前页直线；如页面有无关直线，也可按 Ctrl 精确选中外框和需要的分割线。</li>
         <li>分割线两端应稍微伸出外框边界；当前分割线仍需使用直线。</li>
         <li>椭圆节点线网无需外框：取消所有选择后操作，插件会扫描当前页并识别所有闭合面。</li>
         <li>线网区域由真实线段截段和节点椭圆弧构成，不再直接连接圆心。</li>
         <li>勾选“包含椭圆内部区域”后，椭圆内部也会成为可单独选择和填色的候选区域。</li>
         <li>曲边使用高密度节点近似，标准精度通常已经看不出折角。</li>
-        <li>“显示可选区域”会建立浅蓝色候选层。点击区域内部，出现选择框后再执行第 2 步。</li>
-        <li>按 Ctrl 可同时选择多个候选区域；填充完成后，未选中的候选层会自动删除。</li>
+        <li>“开始点选”会建立浅蓝色候选层。直接逐个点击区域即可连续多选，不需要按 Ctrl。</li>
+        <li>插件会自动记录点击并取消 WPS 的矩形控制框；区域颜色加深表示已选，再点一次即可取消。</li>
+        <li>点击“完成并填充”后，未点选的候选层会自动删除。</li>
       </ul>
     </details>
   </main>

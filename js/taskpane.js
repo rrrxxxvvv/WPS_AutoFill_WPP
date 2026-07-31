@@ -10,6 +10,9 @@
     '#3949ab', '#8e24aa', '#6d4c41', '#78909c'
   ]
   let savedColors = []
+  let manualSelectionActive = false
+  let manualPollBusy = false
+  let manualDetectionText = ''
 
   function settings() {
     return {
@@ -134,6 +137,36 @@
     return '外框模式：识别到 ' + result.faceCount + ' 个闭合区域'
   }
 
+  function updateManualSelectionStatus(count) {
+    const button = $('generateSelected')
+    if (button) button.textContent = '完成并填充（' + count + '）'
+    show(
+      (manualDetectionText ? manualDetectionText + '。\n' : '') +
+      '已点选 ' + count + ' 个区域。直接继续点击其他区域；再次点击已加深区域可取消。完成后点击“完成并填充”。',
+      count ? 'ok' : ''
+    )
+  }
+
+  function stopManualSelection() {
+    manualSelectionActive = false
+    manualPollBusy = false
+    const button = $('generateSelected')
+    if (button) button.textContent = '完成并填充'
+  }
+
+  function pollManualSelection() {
+    if (!manualSelectionActive || manualPollBusy) return
+    manualPollBusy = true
+    try {
+      const result = window.WpsAutoFill.captureManualSelection(settings())
+      if (result.changed) updateManualSelectionStatus(result.count)
+    } catch (_) {
+      // 页面切换或 WPS 正在更新选择时可能短暂无选择；下一轮继续检查。
+    } finally {
+      manualPollBusy = false
+    }
+  }
+
   $('opacity').addEventListener('input', event => {
     $('opacityValue').textContent = event.target.value + '%'
   })
@@ -157,20 +190,21 @@
   })
 
   $('prepare').addEventListener('click', () => run(() => {
+    stopManualSelection()
     const result = window.WpsAutoFill.prepareManualSelection(settings())
-    show(
-      detectionSummary(result) + '。\n' +
-      '已显示 ' + result.count + ' 个浅色候选区域。请到幻灯片中点击区域内部；出现选择框即表示选中。按 Ctrl 可多选，然后返回点击“填充已选候选区域”。',
-      'ok'
-    )
+    manualDetectionText = detectionSummary(result)
+    manualSelectionActive = true
+    updateManualSelectionStatus(0)
   }))
 
   $('generateSelected').addEventListener('click', () => run(() => {
     const result = window.WpsAutoFill.generateSelected(settings())
+    stopManualSelection()
     show('已生成选中的 ' + result.count + ' 个填色区域，其余候选区域已清除。', 'ok')
   }))
 
   $('generate').addEventListener('click', () => run(() => {
+    stopManualSelection()
     const result = window.WpsAutoFill.generate(settings())
     show(
       detectionSummary(result) + '。\n已填充全部 ' + result.count + ' 个区域，并置于原轮廓和连线下方。',
@@ -184,6 +218,7 @@
   }))
 
   $('delete').addEventListener('click', () => run(() => {
+    stopManualSelection()
     const count = window.WpsAutoFill.deleteGenerated()
     show(count ? '已清理本页 ' + count + ' 个候选或生成区域。' : '本页没有插件生成的区域。', 'ok')
   }))
@@ -191,4 +226,5 @@
   loadSavedColors()
   renderClassicColors()
   renderSavedColors()
+  window.setInterval(pollManualSelection, 140)
 })()

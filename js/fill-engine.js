@@ -3,6 +3,8 @@
 
   const PREFIX = 'WPS_AutoFill_'
   const PREVIEW_PREFIX = PREFIX + 'Preview_'
+  const PICKED_PREVIEW_PREFIX = PREVIEW_PREFIX + 'Picked_'
+  let lastPreviewSelectionKey = ''
   const M = {
     msoFalse: 0,
     msoTrue: -1,
@@ -55,6 +57,10 @@
 
   function isPreviewShape(shape) {
     return shapeName(shape).indexOf(PREVIEW_PREFIX) === 0
+  }
+
+  function isPickedPreviewShape(shape) {
+    return shapeName(shape).indexOf(PICKED_PREVIEW_PREFIX) === 0
   }
 
   function isPluginShape(shape) {
@@ -1182,7 +1188,18 @@
     const app = getApplication()
     const slide = getActiveSlide(app)
     const selected = getSelectedShapes(app, '', true)
-    const sourceShapes = selected.length ? selected : getSlideShapes(slide)
+    const slideShapes = getSlideShapes(slide)
+    let sourceShapes = selected.length ? selected : slideShapes
+
+    // 外框模式的常用流程只需选中外框；插件自动收集当前页直线，
+    // 避免普通用户为了“外框 + 全部分割线”必须一直按住 Ctrl。
+    if (
+      selected.length === 1 &&
+      !isPluginShape(selected[0]) &&
+      supportedBoundaryKind(selected[0])
+    ) {
+      sourceShapes = [selected[0]].concat(slideShapes.filter(shape => isStraightLine(shape)))
+    }
     const boundaryShapes = sourceShapes.filter(shape => supportedBoundaryKind(shape))
     const ellipseShapes = sourceShapes.filter(shape => isEllipse(shape) && !isPluginShape(shape))
     const lineShapes = sourceShapes.filter(shape => isStraightLine(shape) && !isPluginShape(shape))
@@ -1279,6 +1296,54 @@
     return deleted
   }
 
+  function previewSelectionKey(shape) {
+    return shapeName(shape)
+      .replace(PICKED_PREVIEW_PREFIX, '')
+      .replace(PREVIEW_PREFIX, '')
+  }
+
+  function countPickedPreviews(slide) {
+    let count = 0
+    for (let i = 1; i <= toNumber(slide.Shapes.Count, 0); i += 1) {
+      if (isPickedPreviewShape(slide.Shapes.Item(i))) count += 1
+    }
+    return count
+  }
+
+  function setPreviewPicked(shape, picked, color) {
+    const key = previewSelectionKey(shape)
+    shape.Name = (picked ? PICKED_PREVIEW_PREFIX : PREVIEW_PREFIX) + key
+    setFill(shape, color, picked ? 46 : 18)
+  }
+
+  function captureManualSelection(options) {
+    const settings = Object.assign({ color: '#4f7cff' }, options || {})
+    const app = getApplication()
+    const slide = getActiveSlide(app)
+    const selected = getSelectedShapes(app, '', true).filter(isPreviewShape)
+
+    if (!selected.length) {
+      lastPreviewSelectionKey = ''
+      return { changed: false, count: countPickedPreviews(slide) }
+    }
+
+    const selectionKey = selected.map(previewSelectionKey).sort().join('|')
+    if (selectionKey === lastPreviewSelectionKey) {
+      unselectCurrentShapes(app)
+      return { changed: false, count: countPickedPreviews(slide) }
+    }
+
+    lastPreviewSelectionKey = selectionKey
+    selected.forEach(shape => {
+      setPreviewPicked(shape, !isPickedPreviewShape(shape), settings.color)
+    })
+    unselectCurrentShapes(app)
+    return {
+      changed: true,
+      count: countPickedPreviews(slide)
+    }
+  }
+
   function disableBoundaryFill(model, settings) {
     const disable = settings.disableBoundaryFill !== undefined
       ? settings.disableBoundaryFill
@@ -1342,6 +1407,7 @@
     }, options || {})
     const model = collectSelectionModel(settings)
     clearPreviewShapes(model.slide)
+    lastPreviewSelectionKey = ''
     disableBoundaryFill(model, settings)
 
     const runId = Date.now().toString(36)
@@ -1362,16 +1428,23 @@
       palette: false
     }, options || {})
     const app = getApplication()
-    const selected = getSelectedShapes(
-      app,
-      '当前没有选中候选区域。请先点“显示可选区域”，再到幻灯片上点击一个浅色区域的内部。'
-    )
-    const previews = selected.filter(isPreviewShape)
+    const slide = getActiveSlide(app)
+
+    // 若用户刚点完区域便立即点击任务窗格，轮询可能还未来得及记录；
+    // 在提交前再收集一次当前 WPS 选择，确保这次点击不会丢失。
+    const currentlySelected = getSelectedShapes(app, '', true).filter(isPreviewShape)
+    currentlySelected.forEach(shape => {
+      if (!isPickedPreviewShape(shape)) setPreviewPicked(shape, true, settings.color)
+    })
+    const previews = []
+    for (let i = 1; i <= toNumber(slide.Shapes.Count, 0); i += 1) {
+      const shape = slide.Shapes.Item(i)
+      if (isPickedPreviewShape(shape)) previews.push(shape)
+    }
     if (!previews.length) {
-      throw new Error('当前选中的不是候选区域。请点击浅色区域的内部；需要多个时可按 Ctrl 多选。')
+      throw new Error('还没有点选候选区域。请直接点击一个或多个浅色区域，已选区域会自动加深。')
     }
 
-    const slide = getActiveSlide(app)
     const runId = Date.now().toString(36)
     const names = []
     for (let i = 0; i < previews.length; i += 1) {
@@ -1390,6 +1463,7 @@
       if (isPreviewShape(shape)) shape.Delete()
     }
     unselectCurrentShapes(app)
+    lastPreviewSelectionKey = ''
     return { count: names.length, names }
   }
 
@@ -1420,9 +1494,11 @@
   const api = {
     PREFIX,
     PREVIEW_PREFIX,
+    PICKED_PREVIEW_PREFIX,
     analyze,
     generate,
     prepareManualSelection,
+    captureManualSelection,
     generateSelected,
     recolorSelected,
     deleteGenerated,

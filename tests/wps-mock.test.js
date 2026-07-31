@@ -120,7 +120,8 @@ const divider2 = makeShape({
 shapes.items.push(boundary, divider1, divider2)
 
 const slide = { Shapes: shapes }
-let selected = [boundary, divider1, divider2]
+// 普通外框流程只选中外框，插件应自动读取当前页分割线，无需 Ctrl 多选。
+let selected = [boundary]
 let nullShapeRange = false
 let unselectCount = 0
 const selection = {
@@ -168,10 +169,35 @@ previews.forEach(shape => {
   })
 })
 
+selected = [previews[0]]
+let captured = engine.captureManualSelection({ color: '#4f7cff' })
+assert.strictEqual(captured.changed, true)
+assert.strictEqual(captured.count, 1)
+assert.ok(previews[0].Name.startsWith(engine.PICKED_PREVIEW_PREFIX))
+assert.ok(Math.abs(previews[0].Fill.Transparency - 0.54) < 1e-9, '已点选候选区域应加深显示')
+assert.strictEqual(unselectCount, 2, '点选候选区域后应立即清除 WPS 外接矩形控制框')
+
+selected = []
+engine.captureManualSelection({ color: '#4f7cff' })
 selected = [previews[1]]
+captured = engine.captureManualSelection({ color: '#4f7cff' })
+assert.strictEqual(captured.count, 2, '无需 Ctrl 即可连续记录多个候选区域')
+assert.strictEqual(unselectCount, 3)
+
+selected = []
+engine.captureManualSelection({ color: '#4f7cff' })
+selected = [previews[0]]
+captured = engine.captureManualSelection({ color: '#4f7cff' })
+assert.strictEqual(captured.count, 1, '再次点击已点选区域应取消选择')
+assert.ok(previews[0].Name.startsWith(engine.PREVIEW_PREFIX))
+assert.ok(!previews[0].Name.startsWith(engine.PICKED_PREVIEW_PREFIX))
+assert.strictEqual(unselectCount, 4)
+
+selected = []
+engine.captureManualSelection({ color: '#4f7cff' })
 const generated = engine.generateSelected({ color: '#ff6600', opacity: 72 })
 assert.strictEqual(generated.count, 1)
-assert.strictEqual(unselectCount, 2, '提交选中区域后应清除控制柄')
+assert.strictEqual(unselectCount, 5, '提交点选区域后应清除控制柄')
 assert.strictEqual(shapes.items.filter(shape => shape.Name.startsWith(engine.PREVIEW_PREFIX)).length, 0)
 const committed = shapes.items.filter(shape => shape.Name.startsWith(engine.PREFIX))
 assert.strictEqual(committed.length, 1)
@@ -225,7 +251,7 @@ const networkPrepared = engine.prepareManualSelection({
   disableBoundaryFill: true
 })
 assert.strictEqual(networkPrepared.count, 5)
-assert.strictEqual(unselectCount, 3)
+assert.strictEqual(unselectCount, 6)
 const networkPreviews = shapes.items.filter(shape => shape.Name.startsWith(engine.PREVIEW_PREFIX))
 assert.strictEqual(networkPreviews.length, 5)
 assert.ok(networkPreviews.every(shape => shape._points.length > 4), '线网面和椭圆内部都不应退化成圆心三角形')
