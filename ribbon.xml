@@ -1,0 +1,17 @@
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="OnAddinLoad">
+  <ribbon startFromScratch="false">
+    <tabs>
+      <tab id="wpsAutoFillTab" label="自动填色">
+        <group id="wpsAutoFillGroup" label="区域生成">
+          <button id="btnOpenAutoFillPane"
+                  label="自动生成填色区域"
+                  screentip="从椭圆和直线生成自由形状"
+                  supertip="先选中一个椭圆和若干贯穿椭圆的直线，再打开任务窗格。"
+                  onAction="OnAction"
+                  getImage="GetImage"
+                  size="large"/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

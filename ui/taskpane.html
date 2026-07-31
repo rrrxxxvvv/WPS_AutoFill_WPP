@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自动填色</title>
+  <link rel="stylesheet" href="taskpane.css">
+</head>
+<body>
+  <main class="panel">
+    <h1>自动填色</h1>
+    <p class="intro">识别图形中的闭合区域，并生成可独立编辑的无边框填色形状。</p>
+
+    <section class="source-guide" aria-labelledby="source-title">
+      <h2 id="source-title">先确定识别范围</h2>
+      <div class="source-mode">
+        <span class="mode-label">外框模式</span>
+        <span>选中 1 个闭合外框和全部分割线</span>
+      </div>
+      <div class="source-mode">
+        <span class="mode-label">线网模式</span>
+        <span>点击幻灯片空白处取消选择，自动扫描当前页</span>
+      </div>
+    </section>
+
+    <section class="card settings-card" aria-labelledby="settings-title">
+      <h2 id="settings-title">填充设置</h2>
+      <label class="row">
+        <span>填充颜色</span>
+        <input id="color" type="color" value="#4f7cff">
+      </label>
+
+      <div class="color-section">
+        <div class="color-section-title">经典颜色</div>
+        <div id="classicColors" class="color-swatches" aria-label="经典颜色"></div>
+      </div>
+
+      <div class="color-section">
+        <div class="color-section-heading">
+          <span class="color-section-title">临时颜色</span>
+          <span class="color-actions">
+            <button id="saveColor" type="button" class="text-button">保存当前</button>
+            <button id="clearSavedColors" type="button" class="text-button muted-button">清空</button>
+          </span>
+        </div>
+        <div id="savedColors" class="color-swatches saved-swatches" aria-label="临时保存颜色">
+          <span class="empty-colors">尚未保存颜色</span>
+        </div>
+      </div>
+
+      <label class="row range-row">
+        <span>不透明度</span>
+        <input id="opacity" type="range" min="5" max="100" value="72">
+        <output id="opacityValue">72%</output>
+      </label>
+
+      <label class="row">
+        <span>曲边精度</span>
+        <select id="segments">
+          <option value="96">快速</option>
+          <option value="160" selected>标准</option>
+          <option value="240">精细</option>
+        </select>
+      </label>
+
+      <label class="check-row">
+        <input id="palette" type="checkbox">
+        <span>生成时自动使用同色系调色板</span>
+      </label>
+
+      <label class="check-row">
+        <input id="includeNodeInteriors" type="checkbox" checked>
+        <span>线网模式包含椭圆内部区域</span>
+      </label>
+
+      <label class="check-row">
+        <input id="disableBoundaryFill" type="checkbox" checked>
+        <span>关闭原外框/节点填充，只保留轮廓</span>
+      </label>
+    </section>
+
+    <section class="workflow" aria-labelledby="workflow-title">
+      <h2 id="workflow-title">选择填色方式</h2>
+
+      <article class="workflow-card">
+        <div class="workflow-heading">
+          <div>
+            <h3>手动挑选区域</h3>
+            <p>适合只填充少数区域</p>
+          </div>
+          <span class="recommended">推荐</span>
+        </div>
+        <ol class="mini-steps">
+          <li>显示浅色候选区域</li>
+          <li>到幻灯片中点击区域内部，按 Ctrl 可多选</li>
+          <li>返回任务窗格应用填充</li>
+        </ol>
+        <div class="manual-actions">
+          <button id="prepare" class="secondary">显示候选区域</button>
+          <button id="generateSelected" class="primary">填充已选候选区域</button>
+        </div>
+      </article>
+
+      <div class="or"><span>或者</span></div>
+
+      <article class="workflow-card compact-card">
+        <div class="workflow-heading">
+          <div>
+            <h3>一次填充全部</h3>
+            <p>直接生成当前识别范围内的所有区域</p>
+          </div>
+        </div>
+        <button id="generate" class="primary full-button">填充全部识别区域</button>
+      </article>
+    </section>
+
+    <section id="status" class="status" aria-live="polite">请先确定识别范围，再选择手动挑选或全部填充。</section>
+
+    <section class="manage" aria-labelledby="manage-title">
+      <h2 id="manage-title">管理已生成区域</h2>
+      <p>先在幻灯片中选中插件生成的填色形状，再进行换色；清理操作会删除本页所有候选和已生成区域。</p>
+      <div class="manage-actions">
+        <button id="recolor" class="secondary">给选中区域换色</button>
+        <button id="delete" class="danger">清理本页生成区域</button>
+      </div>
+    </section>
+
+    <details>
+      <summary>识别规则与使用限制</summary>
+      <ul>
+        <li>当前版本面向 WPS 演示桌面版。</li>
+        <li>支持矩形、圆角矩形、椭圆、常用多边形和已闭合自由形状作为外框。</li>
+        <li>分割线两端应稍微伸出外框边界；当前分割线仍需使用直线。</li>
+        <li>椭圆节点线网无需外框：取消所有选择后操作，插件会扫描当前页并识别所有闭合面。</li>
+        <li>线网区域由真实线段截段和节点椭圆弧构成，不再直接连接圆心。</li>
+        <li>勾选“包含椭圆内部区域”后，椭圆内部也会成为可单独选择和填色的候选区域。</li>
+        <li>曲边使用高密度节点近似，标准精度通常已经看不出折角。</li>
+        <li>“显示可选区域”会建立浅蓝色候选层。点击区域内部，出现选择框后再执行第 2 步。</li>
+        <li>按 Ctrl 可同时选择多个候选区域；填充完成后，未选中的候选层会自动删除。</li>
+      </ul>
+    </details>
+  </main>
+
+  <script src="../js/fill-engine.js"></script>
+  <script src="../js/taskpane.js"></script>
+</body>
+</html>

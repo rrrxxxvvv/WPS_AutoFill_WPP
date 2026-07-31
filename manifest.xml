@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JsPlugin>
+  <ApiVersion>1.0.0</ApiVersion>
+  <Name>WpsAutoFillWpp</Name>
+  <Description>根据椭圆和直线自动生成可独立填色的自由形状</Description>
+</JsPlugin>

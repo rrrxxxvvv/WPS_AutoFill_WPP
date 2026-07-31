@@ -1,0 +1,71 @@
+name: 缺陷报告
+description: 报告可稳定复现的问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜索现有 Issue，并移除演示文稿中的敏感内容。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 清楚说明实际发生了什么，以及你预期发生什么。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开……
+        2. 选择……
+        3. 点击……
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 识别模式
+      options:
+        - 外框模式
+        - 线网模式
+        - 不确定或不适用
+    validations:
+      required: true
+  - type: input
+    id: wps-version
+    attributes:
+      label: WPS 版本
+      placeholder: 例如 12.x.x
+    validations:
+      required: true
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows 版本
+      placeholder: 例如 Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图、示例文件或错误信息
+      description: 可拖入截图或经过脱敏的最小示例文件。请不要上传私人或机密文档。
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他信息
+      description: 填写任何可能有助于定位问题的补充信息。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue，未发现相同问题。
+          required: true
+        - label: 我已确认示例和截图不包含敏感信息。
+          required: true
+
