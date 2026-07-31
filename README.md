@@ -1,5 +1,15 @@
 # WPS 演示自动填色
 
+> [!IMPORTANT]
+> **普通用户请从 [Releases 页面](https://github.com/rrrxxxvvv/WPS_AutoFill_WPP/releases/latest) 下载 `wps-autofill-wpp.exe`，不要下载页面自动生成的 Source code 压缩包。**
+>
+> 1. 保存并关闭 WPS；
+> 2. 双击 `wps-autofill-wpp.exe` 完成安装；
+> 3. 重新打开 WPS 演示；
+> 4. 点击顶部 **自动填色 → 自动生成填色区域**。
+>
+> 安装和使用不需要 Node.js，也不需要编写代码。第一次使用请阅读 [普通用户使用指南](docs/USER_GUIDE.md)。安装包尚未进行代码签名，Windows 可能显示“未知发布者”，请确认文件来自本仓库的 Releases 页面。
+
 一个面向 WPS 演示 Windows 桌面版的 JS 加载项。它可以识别幻灯片中的闭合区域，并生成可独立选择、换色和删除的无边框填色形状。
 
 项目支持两类图形：
@@ -55,6 +65,8 @@
 - WPS JS 加载项开发工具 `wpsjs`。
 
 ## 快速开始
+
+如果你只是想安装和使用插件，不需要执行下面的开发命令，请直接阅读 [普通用户使用指南](docs/USER_GUIDE.md)。
 
 ### 1. 安装依赖
 
@@ -192,11 +204,36 @@ npm test
 # 生成生产构建
 npm run build
 
+# 生成供普通用户安装的 Windows EXE
+npm run package:exe
+
 # 按 WPS 官方流程发布
 wpsjs publish
 ```
 
 生产构建输出位于 `dist/`。
+
+## 打包与发布
+
+普通用户发布建议使用 Windows 自解压安装包：
+
+```powershell
+npm ci
+npm test
+npm run package:exe
+```
+
+安装包生成在：
+
+```text
+wps-addon-build/wps-autofill-wpp.exe
+```
+
+打包前应先在 `package.json` 中更新 `version`，并确保 `npm test` 与 `npm run build` 均通过。将生成的 EXE 上传到 GitHub Release，并在发布说明中附上 [普通用户使用指南](docs/USER_GUIDE.md)。
+
+这个 EXE 是由 `wpsjs` 生成的自解压安装程序，会把插件复制到当前 Windows 用户的 WPS JS 加载项目录，并写入加载配置。由于安装包未进行代码签名，Windows 或安全软件可能显示未知发布者提示；正式面向公众发布时，建议使用可信代码签名证书签名。
+
+如果需要部署在线版本，可运行 `wpsjs publish`，并按照命令行提示配置静态资源服务器。在线部署需要长期可访问的 HTTPS 地址和版本维护，不适合作为首次发布方式。
 
 ## 常见问题
 

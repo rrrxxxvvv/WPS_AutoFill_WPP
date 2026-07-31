@@ -6,6 +6,8 @@ dist/
 .vite/
 coverage/
 .cache/
+wps-addon-build/
+wps-addon-publish/
 
 # Logs
 *.log
@@ -28,6 +30,7 @@ pnpm-debug.log*
 *.pps
 *.ppsx
 *.tmp
+*.7z
 ~$*
 
 # Editors and IDEs
@@ -42,4 +45,3 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
-

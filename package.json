@@ -8,6 +8,7 @@
 	"scripts": {
 		"dev": "vite --port 3889",
 		"build": "vite build",
+		"package:exe": "wpsjs build --exe",
 		"preview": "vite preview",
 		"test": "node tests/geometry.test.js && node tests/wps-mock.test.js"
 	},
