@@ -36,6 +36,9 @@
     const status = $('status')
     status.className = 'status' + (kind ? ' ' + kind : '')
     status.textContent = message
+    if (kind === 'error') {
+      try { status.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) } catch (_) {}
+    }
   }
 
   function run(action) {
@@ -47,6 +50,21 @@
     } finally {
       setBusy(false)
     }
+  }
+
+  function runDeferred(message, action) {
+    setBusy(true)
+    show(message || '正在读取幻灯片对象，请稍候……', '')
+    try { $('status').scrollIntoView({ block: 'nearest', behavior: 'smooth' }) } catch (_) {}
+    window.setTimeout(() => {
+      try {
+        action()
+      } catch (error) {
+        show(error && error.message ? error.message : String(error), 'error')
+      } finally {
+        setBusy(false)
+      }
+    }, 30)
   }
 
   function normalizeColor(color) {
@@ -192,13 +210,15 @@
     show('已清空临时颜色。', 'ok')
   })
 
-  $('prepare').addEventListener('click', () => run(() => {
+  $('prepare').addEventListener('click', () => {
     stopManualSelection()
-    const result = window.WpsAutoFill.prepareManualSelection(settings())
-    manualDetectionText = detectionSummary(result)
-    manualSelectionActive = true
-    updateManualSelectionStatus(0)
-  }))
+    runDeferred('正在扫描当前页并建立候选区域，请稍候……', () => {
+      const result = window.WpsAutoFill.prepareManualSelection(settings())
+      manualDetectionText = detectionSummary(result)
+      manualSelectionActive = true
+      updateManualSelectionStatus(0)
+    })
+  })
 
   $('generateSelected').addEventListener('click', () => run(() => {
     const result = window.WpsAutoFill.generateSelected(settings())
@@ -206,14 +226,16 @@
     show('已生成选中的 ' + result.count + ' 个填色区域，其余候选区域已清除。', 'ok')
   }))
 
-  $('generate').addEventListener('click', () => run(() => {
+  $('generate').addEventListener('click', () => {
     stopManualSelection()
-    const result = window.WpsAutoFill.generate(settings())
-    show(
-      detectionSummary(result) + '。\n已填充全部 ' + result.count + ' 个区域，并置于原轮廓和连线下方。',
-      'ok'
-    )
-  }))
+    runDeferred('正在扫描并生成全部区域，请稍候……', () => {
+      const result = window.WpsAutoFill.generate(settings())
+      show(
+        detectionSummary(result) + '。\n已填充全部 ' + result.count + ' 个区域，并置于原轮廓和连线下方。',
+        'ok'
+      )
+    })
+  })
 
   $('recolor').addEventListener('click', () => run(() => {
     const count = window.WpsAutoFill.recolorSelected(settings())

@@ -78,7 +78,16 @@ assert.ok(Math.abs(openDividerArea - 10000) < 0.01, '开放路径不应在闭合
 
 const curveShape = {
   Name: '曲线 1',
-  Vertices: [[0, 0], [30, 100], [70, -100], [100, 0]],
+  Vertices: {
+    Count: 4,
+    Item(index) {
+      const point = [[0, 0], [30, 100], [70, -100], [100, 0]][index - 1]
+      return {
+        Count: 2,
+        Item(coordinateIndex) { return point[coordinateIndex - 1] }
+      }
+    }
+  },
   Nodes: {
     Count: 2,
     Item(index) {

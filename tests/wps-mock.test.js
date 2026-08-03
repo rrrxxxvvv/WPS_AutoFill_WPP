@@ -291,9 +291,18 @@ const genericCurve = makeShape({
     }
   }
 }, shapes)
-shapes.items.push(genericA, genericB, genericCurve)
+const genericGroup = makeShape({
+  Name: '组合线稿 1',
+  Type: 6,
+  AutoShapeType: -2,
+  GroupItems: {
+    Count: 3,
+    Item(index) { return [genericA, genericB, genericCurve][index - 1] }
+  }
+}, shapes)
+shapes.items.push(genericGroup)
 nullShapeRange = false
-selected = [genericA, genericB, genericCurve]
+selected = [genericGroup]
 
 const genericPrepared = engine.prepareManualSelection({
   color: '#4f7cff',
@@ -301,7 +310,7 @@ const genericPrepared = engine.prepareManualSelection({
   disableBoundaryFill: true
 })
 assert.strictEqual(genericPrepared.mode, 'generic')
-assert.strictEqual(genericPrepared.count, 4, '重叠多边形和自由曲线应进入通用线稿模式并拆分闭合面')
+assert.strictEqual(genericPrepared.count, 4, '组合中的重叠多边形和自由曲线应递归展开并拆分闭合面')
 assert.strictEqual(genericA.Fill.Visible, 0)
 assert.strictEqual(genericB.Fill.Visible, 0)
 const genericPreviews = shapes.items.filter(shape => shape.Name.startsWith(engine.PREVIEW_PREFIX))

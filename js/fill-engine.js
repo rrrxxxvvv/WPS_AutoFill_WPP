@@ -10,6 +10,7 @@
     msoTrue: -1,
     msoAutoShape: 1,
     msoFreeform: 5,
+    msoGroup: 6,
     msoEditingCorner: 1,
     msoSegmentLine: 0,
     msoSegmentCurve: 1,
@@ -120,13 +121,40 @@
     return result
   }
 
+  function expandShape(shape, result, depth) {
+    if (!shape || depth > 8) return
+    let type = NaN
+    try { type = Number(shape.Type) } catch (_) {}
+    if (type === M.msoGroup) {
+      let items = null
+      try { items = shape.GroupItems } catch (_) {}
+      const count = toNumber(items && items.Count, 0)
+      if (count > 0) {
+        for (let i = 1; i <= count; i += 1) {
+          try { expandShape(items.Item(i), result, depth + 1) } catch (_) {}
+        }
+        return
+      }
+    }
+    result.push(shape)
+  }
+
+  function expandShapes(shapes) {
+    const result = []
+    ;(shapes || []).forEach(shape => expandShape(shape, result, 0))
+    return result
+  }
+
   function getSlideShapes(slide) {
     const result = []
     let count = 0
     try { count = toNumber(slide && slide.Shapes && slide.Shapes.Count, 0) } catch (_) {}
     for (let i = 1; i <= count; i += 1) {
       const shape = slide.Shapes.Item(i)
-      if (!isPluginShape(shape)) result.push(shape)
+      const expanded = expandShapes([shape])
+      expanded.forEach(item => {
+        if (!isPluginShape(item)) result.push(item)
+      })
     }
     return result
   }
@@ -282,6 +310,19 @@
       for (let i = 0; i < Number(value.length); i += 1) {
         flattenNumbers(value[i], output, depth + 1)
       }
+      return
+    }
+    if (typeof value === 'object' && Number.isFinite(Number(value.Count)) && typeof value.Item === 'function') {
+      for (let i = 1; i <= Number(value.Count); i += 1) {
+        try { flattenNumbers(value.Item(i), output, depth + 1) } catch (_) {}
+      }
+      return
+    }
+    if (typeof value === 'object') {
+      Object.keys(value)
+        .filter(key => /^\d+$/.test(key))
+        .sort((a, b) => Number(a) - Number(b))
+        .forEach(key => flattenNumbers(value[key], output, depth + 1))
     }
   }
 
@@ -1401,7 +1442,8 @@
   function collectSelectionModel(options) {
     const app = getApplication()
     const slide = getActiveSlide(app)
-    const selected = getSelectedShapes(app, '', true)
+    const selectedTopLevel = getSelectedShapes(app, '', true)
+    const selected = expandShapes(selectedTopLevel).filter(shape => !isPluginShape(shape))
     const slideShapes = getSlideShapes(slide)
     let sourceShapes = selected.length ? selected : slideShapes
 
@@ -1437,7 +1479,7 @@
           faceCount: network.faceRegions.length,
           nodeRegionCount: network.nodeRegions.length,
           ignoredLines: network.ignoredLines,
-          scannedWholeSlide: selected.length === 0,
+          scannedWholeSlide: selectedTopLevel.length === 0,
           selectedCount: selected.length
         }
       } catch (_) {
@@ -1464,7 +1506,7 @@
           faceCount: regions.length,
           nodeRegionCount: 0,
           ignoredLines: [],
-          scannedWholeSlide: selected.length === 0,
+          scannedWholeSlide: selectedTopLevel.length === 0,
           selectedCount: selected.length
         }
       } catch (error) {
@@ -1473,10 +1515,27 @@
       }
     }
 
+    const pathFailures = []
     const paths = sourceShapes.map(shape => {
-      try { return genericPathFromShape(shape, segments) } catch (_) { return null }
+      try {
+        const path = genericPathFromShape(shape, segments)
+        if (!path) pathFailures.push(shapeName(shape) + '（不支持的对象类型）')
+        return path
+      } catch (error) {
+        pathFailures.push(shapeName(shape) + '（' + (error && error.message ? error.message : '读取失败') + '）')
+        return null
+      }
     }).filter(Boolean)
-    const genericRegions = buildGenericRegions(paths)
+    let genericRegions
+    try {
+      genericRegions = buildGenericRegions(paths)
+    } catch (error) {
+      const failed = pathFailures.length ? '；未读取：' + pathFailures.slice(0, 3).join('、') : ''
+      throw new Error(
+        '通用线稿已扫描 ' + sourceShapes.length + ' 个对象，成功读取 ' + paths.length + ' 条路径。' +
+        (error && error.message ? error.message : String(error)) + failed
+      )
+    }
     const closedShapes = paths.filter(path => path.closed).map(path => path.shape)
     return {
       app,
@@ -1492,7 +1551,7 @@
       faceCount: genericRegions.length,
       nodeRegionCount: 0,
       ignoredLines: [],
-      scannedWholeSlide: selected.length === 0,
+      scannedWholeSlide: selectedTopLevel.length === 0,
       selectedCount: selected.length
     }
   }
