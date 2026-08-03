@@ -13,7 +13,7 @@
 		"test": "node tests/geometry.test.js && node tests/wps-mock.test.js"
 	},
 	"devDependencies": {
-		"vite": "^5.3.1",
+		"vite": "^8.2.0",
 		"wpp-jsapi-declare": "latest",
 		"wpsjs": "^2.2.3"
 	}
