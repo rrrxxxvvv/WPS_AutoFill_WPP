@@ -1,6 +1,6 @@
 {
 	"name": "wps-autofill-wpp",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"private": true,
 	"license": "MIT",
 	"description": "WPS 演示加载项：识别闭合外框和椭圆节点线网，生成可独立填色区域",

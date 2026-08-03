@@ -55,6 +55,42 @@ assert.strictEqual(regions.length, 2, '凹自由形状也应能按直线切分')
 const concaveArea = regions.reduce((sum, p) => sum + Math.abs(g.polygonArea(p)), 0)
 assert.ok(Math.abs(concaveArea - 5100) < 0.01, '凹形切分后的区域总面积应等于原外框面积')
 
+const overlappingPaths = [
+  { closed: true, points: [
+    { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+  ] },
+  { closed: true, points: [
+    { x: 50, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 100 }, { x: 50, y: 100 }
+  ] }
+]
+regions = g.buildGenericRegions(overlappingPaths)
+assert.strictEqual(regions.length, 3, '两个重叠多边形应按交点拆成三个独立闭合区域')
+const overlappingArea = regions.reduce((sum, p) => sum + Math.abs(g.polygonArea(p)), 0)
+assert.ok(Math.abs(overlappingArea - 15000) < 0.01, '通用线稿区域总面积应等于重叠多边形的并集面积')
+
+regions = g.buildGenericRegions([
+  overlappingPaths[0],
+  { closed: false, points: [{ x: 50, y: -20 }, { x: 50, y: 120 }] }
+])
+assert.strictEqual(regions.length, 2, '穿过闭合多边形的开放路径应将其切成两个区域')
+const openDividerArea = regions.reduce((sum, p) => sum + Math.abs(g.polygonArea(p)), 0)
+assert.ok(Math.abs(openDividerArea - 10000) < 0.01, '开放路径不应在闭合轮廓外生成区域')
+
+const curveShape = {
+  Name: '曲线 1',
+  Vertices: [[0, 0], [30, 100], [70, -100], [100, 0]],
+  Nodes: {
+    Count: 2,
+    Item(index) {
+      return { SegmentType: 1, Points: index === 1 ? [[0, 0]] : [[100, 0]] }
+    }
+  }
+}
+const sampledCurve = g.sampleFreeformPath(curveShape, 96)
+assert.strictEqual(sampledCurve.closed, false)
+assert.ok(sampledCurve.points.length > 20, '贝塞尔曲线应按控制点采样，而不是退化成端点直线')
+assert.ok(sampledCurve.points.some(point => Math.abs(point.y) > 20), '曲线采样结果应保留实际弯曲')
+
 const graphVertices = [
   { x: 0, y: 0 },
   { x: 100, y: 0 },
@@ -89,6 +125,9 @@ console.log('geometry tests passed:', {
   ellipseRelativeAreaError: Math.abs(totalArea - ellipseArea) / ellipseArea,
   rectangleRegions: 3,
   concaveRegions: 2,
+  genericOverlapRegions: 3,
+  genericOpenDividerRegions: 2,
+  sampledCurveVertices: sampledCurve.points.length,
   networkRegions: 4,
   curvedFaceVertices: curvedFace.length
 })

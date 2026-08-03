@@ -257,5 +257,56 @@ assert.strictEqual(networkPreviews.length, 5)
 assert.ok(networkPreviews.every(shape => shape._points.length > 4), '线网面和椭圆内部都不应退化成圆心三角形')
 assert.ok(networkNodes.every(shape => shape.Fill.Visible === 0), '生成节点内部区域时应关闭原椭圆填充并保留轮廓')
 
+const genericA = makeShape({
+  Name: '矩形 A',
+  Type: 1,
+  AutoShapeType: 1,
+  Left: 700,
+  Top: 0,
+  Width: 100,
+  Height: 100
+}, shapes)
+const genericB = makeShape({
+  Name: '矩形 B',
+  Type: 1,
+  AutoShapeType: 1,
+  Left: 750,
+  Top: 0,
+  Width: 100,
+  Height: 100
+}, shapes)
+const genericCurve = makeShape({
+  Name: '曲线 1',
+  Type: 5,
+  AutoShapeType: -2,
+  Left: 775,
+  Top: -20,
+  Width: 0,
+  Height: 140,
+  Vertices: [[775, -20], [775, 30], [775, 70], [775, 120]],
+  Nodes: {
+    Count: 2,
+    Item(index) {
+      return { SegmentType: 1, Points: index === 1 ? [[775, -20]] : [[775, 120]] }
+    }
+  }
+}, shapes)
+shapes.items.push(genericA, genericB, genericCurve)
+nullShapeRange = false
+selected = [genericA, genericB, genericCurve]
+
+const genericPrepared = engine.prepareManualSelection({
+  color: '#4f7cff',
+  segments: 96,
+  disableBoundaryFill: true
+})
+assert.strictEqual(genericPrepared.mode, 'generic')
+assert.strictEqual(genericPrepared.count, 4, '重叠多边形和自由曲线应进入通用线稿模式并拆分闭合面')
+assert.strictEqual(genericA.Fill.Visible, 0)
+assert.strictEqual(genericB.Fill.Visible, 0)
+const genericPreviews = shapes.items.filter(shape => shape.Name.startsWith(engine.PREVIEW_PREFIX))
+assert.strictEqual(genericPreviews.length, 4)
+assert.ok(genericPreviews.every(shape => shape.Line.Visible === 0))
+
 delete global.Application
 console.log('WPS mock workflow tests passed')

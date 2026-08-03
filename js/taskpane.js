@@ -134,6 +134,9 @@
       return '线网模式：' + result.faceCount + ' 个闭合面，' +
         result.nodeRegionCount + ' 个椭圆内部区域' + ignored
     }
+    if (result.mode === 'generic') {
+      return '通用线稿模式：读取 ' + result.lineCount + ' 条路径，识别到 ' + result.faceCount + ' 个闭合区域'
+    }
     return '外框模式：识别到 ' + result.faceCount + ' 个闭合区域'
   }
 

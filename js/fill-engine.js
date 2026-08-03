@@ -12,6 +12,7 @@
     msoFreeform: 5,
     msoEditingCorner: 1,
     msoSegmentLine: 0,
+    msoSegmentCurve: 1,
     msoSendToBack: 1,
     msoShapeRectangle: 1,
     msoShapeParallelogram: 2,
@@ -295,22 +296,96 @@
     return null
   }
 
-  function sampleFreeform(shape) {
-    let nodes
-    try { nodes = shape.Nodes } catch (_) {
-      throw new Error('无法读取自由形状节点：' + shapeName(shape))
-    }
-    const count = toNumber(nodes && nodes.Count, 0)
+  function pointPairsFromValue(value) {
+    const numbers = []
+    flattenNumbers(value, numbers, 0)
     const points = []
-    for (let i = 1; i <= count; i += 1) {
-      const point = pointFromShapeNode(nodes.Item(i))
-      if (point) pushDistinct(points, point, 1e-5)
+    for (let i = 0; i + 1 < numbers.length; i += 2) {
+      points.push({ x: numbers[i], y: numbers[i + 1] })
     }
-    const cleaned = cleanPolygon(points, 1e-5)
-    if (cleaned.length < 3) {
+    return points
+  }
+
+  function cubicBezierPoint(p0, p1, p2, p3, t) {
+    const mt = 1 - t
+    const mt2 = mt * mt
+    const t2 = t * t
+    return {
+      x: p0.x * mt2 * mt + 3 * p1.x * mt2 * t + 3 * p2.x * mt * t2 + p3.x * t2 * t,
+      y: p0.y * mt2 * mt + 3 * p1.y * mt2 * t + 3 * p2.y * mt * t2 + p3.y * t2 * t
+    }
+  }
+
+  function sampleFreeformPath(shape, segments) {
+    let nodes = null
+    try { nodes = shape.Nodes } catch (_) {}
+    const nodeCount = toNumber(nodes && nodes.Count, 0)
+    let hasCurve = false
+    const nodePoints = []
+    for (let i = 1; i <= nodeCount; i += 1) {
+      const node = nodes.Item(i)
+      try {
+        if (Number(node.SegmentType) === M.msoSegmentCurve) hasCurve = true
+      } catch (_) {}
+      const point = pointFromShapeNode(node)
+      if (point) pushDistinct(nodePoints, point, 1e-6)
+    }
+
+    let vertices = []
+    try { vertices = pointPairsFromValue(shape.Vertices) } catch (_) {}
+    if (vertices.length < 2) vertices = nodePoints
+    if (vertices.length < 2) {
+      throw new Error('无法读取自由线条节点：' + shapeName(shape))
+    }
+
+    const xs = vertices.map(point => point.x)
+    const ys = vertices.map(point => point.y)
+    const scale = Math.max(
+      Math.max.apply(null, xs) - Math.min.apply(null, xs),
+      Math.max.apply(null, ys) - Math.min.apply(null, ys),
+      1
+    )
+    const epsilon = scale * 1e-6
+    const closed = Math.hypot(
+      vertices[0].x - vertices[vertices.length - 1].x,
+      vertices[0].y - vertices[vertices.length - 1].y
+    ) <= epsilon
+
+    let points = []
+    if (hasCurve && vertices.length >= 4 && (vertices.length - 1) % 3 === 0) {
+      const curveCount = (vertices.length - 1) / 3
+      const steps = Math.max(6, Math.min(48, Math.ceil(toNumber(segments, 160) / Math.max(curveCount, 1))))
+      pushDistinct(points, vertices[0], epsilon)
+      for (let curve = 0; curve < curveCount; curve += 1) {
+        const offset = curve * 3
+        for (let step = 1; step <= steps; step += 1) {
+          pushDistinct(points, cubicBezierPoint(
+            vertices[offset],
+            vertices[offset + 1],
+            vertices[offset + 2],
+            vertices[offset + 3],
+            step / steps
+          ), epsilon)
+        }
+      }
+    } else {
+      points = vertices.slice()
+    }
+
+    if (closed && points.length > 1) points.pop()
+    points = closed ? cleanPolygon(points, epsilon) : points.reduce((result, point) => {
+      pushDistinct(result, point, epsilon)
+      return result
+    }, [])
+    return { shape, name: shapeName(shape), points, closed, curved: hasCurve }
+  }
+
+  function sampleFreeform(shape) {
+    const path = sampleFreeformPath(shape, 160)
+    if (!path.closed || path.points.length < 3) {
       throw new Error('自由形状必须是已闭合、至少包含 3 个节点的轮廓：' + shapeName(shape))
     }
-    return cleaned
+    return path.points
   }
 
   function supportedBoundaryKind(shape) {
@@ -681,6 +756,145 @@
       t: Math.max(0, Math.min(1, t)),
       u: Math.max(0, Math.min(1, u))
     }
+  }
+
+  function genericPathFromShape(shape, segments) {
+    if (isPluginShape(shape)) return null
+    if (isStraightLine(shape)) {
+      const line = lineFromShape(shape)
+      return { shape, name: line.name, points: [line.p1, line.p2], closed: false, curved: false }
+    }
+    if (getShapeType(shape) === M.msoFreeform) {
+      return sampleFreeformPath(shape, segments)
+    }
+    if (supportedBoundaryKind(shape)) {
+      const boundary = boundaryFromShape(shape, segments)
+      return {
+        shape,
+        name: boundary.name,
+        points: boundary.points,
+        closed: true,
+        curved: boundary.kind === '椭圆' || boundary.kind === '圆角矩形'
+      }
+    }
+    return null
+  }
+
+  function segmentParameter(point, segment) {
+    const dx = segment.b.x - segment.a.x
+    const dy = segment.b.y - segment.a.y
+    if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 1e-12) return (point.x - segment.a.x) / dx
+    if (Math.abs(dy) > 1e-12) return (point.y - segment.a.y) / dy
+    return 0
+  }
+
+  function addCollinearSegmentSplits(a, b, epsilon) {
+    for (const point of [a.a, a.b]) {
+      if (pointOnSegment(point, b.a, b.b, epsilon)) b.splits.push(segmentParameter(point, b))
+    }
+    for (const point of [b.a, b.b]) {
+      if (pointOnSegment(point, a.a, a.b, epsilon)) a.splits.push(segmentParameter(point, a))
+    }
+  }
+
+  function buildGenericRegions(paths) {
+    const usablePaths = (paths || []).filter(path => {
+      return path && path.points && path.points.length >= (path.closed ? 3 : 2)
+    })
+    if (!usablePaths.length) throw new Error('当前页没有可读取的线条或闭合形状。')
+
+    const allPoints = usablePaths.reduce((result, path) => result.concat(path.points), [])
+    const xs = allPoints.map(point => point.x)
+    const ys = allPoints.map(point => point.y)
+    const scale = Math.max(
+      Math.max.apply(null, xs) - Math.min.apply(null, xs),
+      Math.max.apply(null, ys) - Math.min.apply(null, ys),
+      1
+    )
+    const epsilon = scale * 1e-7
+    const segments = []
+    usablePaths.forEach((path, pathIndex) => {
+      const edgeCount = path.closed ? path.points.length : path.points.length - 1
+      for (let i = 0; i < edgeCount; i += 1) {
+        const a = path.points[i]
+        const b = path.points[(i + 1) % path.points.length]
+        if (Math.hypot(b.x - a.x, b.y - a.y) <= epsilon) continue
+        segments.push({ a, b, pathIndex, splits: [0, 1] })
+      }
+    })
+    if (segments.length > 6000) {
+      throw new Error('线稿采样后超过 6000 段，请降低曲边精度或减少参与识别的对象。')
+    }
+
+    const bounds = segments.map(segment => ({
+      left: Math.min(segment.a.x, segment.b.x) - epsilon,
+      right: Math.max(segment.a.x, segment.b.x) + epsilon,
+      top: Math.min(segment.a.y, segment.b.y) - epsilon,
+      bottom: Math.max(segment.a.y, segment.b.y) + epsilon
+    }))
+    for (let i = 0; i < segments.length; i += 1) {
+      for (let j = i + 1; j < segments.length; j += 1) {
+        if (
+          bounds[i].right < bounds[j].left || bounds[j].right < bounds[i].left ||
+          bounds[i].bottom < bounds[j].top || bounds[j].bottom < bounds[i].top
+        ) continue
+        const hit = segmentIntersection(segments[i], segments[j], epsilon)
+        if (!hit) continue
+        if (hit.collinear) addCollinearSegmentSplits(segments[i], segments[j], epsilon)
+        else {
+          segments[i].splits.push(hit.t)
+          segments[j].splits.push(hit.u)
+        }
+      }
+    }
+
+    const vertices = []
+    const vertexBuckets = new Map()
+    const bucketSize = Math.max(epsilon * 4, 1e-7)
+    const bucketKey = (x, y) => x + ':' + y
+    const getVertexId = point => {
+      const bx = Math.round(point.x / bucketSize)
+      const by = Math.round(point.y / bucketSize)
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const ids = vertexBuckets.get(bucketKey(bx + dx, by + dy)) || []
+          for (const id of ids) {
+            if (Math.hypot(vertices[id].x - point.x, vertices[id].y - point.y) <= epsilon * 4) return id
+          }
+        }
+      }
+      const id = vertices.length
+      vertices.push({ x: point.x, y: point.y })
+      const key = bucketKey(bx, by)
+      if (!vertexBuckets.has(key)) vertexBuckets.set(key, [])
+      vertexBuckets.get(key).push(id)
+      return id
+    }
+
+    const edges = new Map()
+    segments.forEach(segment => {
+      const length = Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y)
+      const splitEpsilon = epsilon / Math.max(length, 1)
+      const splits = uniqueSortedNumbers(segment.splits.map(value => Math.max(0, Math.min(1, value))), splitEpsilon)
+      for (let i = 0; i < splits.length - 1; i += 1) {
+        const a = interpolatePoint(segment.a, segment.b, splits[i])
+        const b = interpolatePoint(segment.a, segment.b, splits[i + 1])
+        if (Math.hypot(b.x - a.x, b.y - a.y) <= epsilon) continue
+        const u = getVertexId(a)
+        const v = getVertexId(b)
+        if (u === v) continue
+        const key = u < v ? u + ':' + v : v + ':' + u
+        if (!edges.has(key)) edges.set(key, { u, v })
+      }
+    })
+
+    const regions = enumerateGraphFaces(vertices, Array.from(edges.values()), false)
+      .map(region => cleanPolygon(region, epsilon))
+      .filter(region => region.length >= 3 && Math.abs(polygonArea(region)) > scale * scale * 1e-8)
+    if (!regions.length) {
+      throw new Error('通用线稿中没有形成闭合区域；请确认线条端点相接或彼此相交。')
+    }
+    return regions
   }
 
   function buildPlanarRegions(boundary, lines) {
@@ -1207,44 +1421,75 @@
     const includeNodeInteriors = !options || options.includeNodeInteriors !== false
 
     if (ellipseShapes.length >= 3 && lineShapes.length >= 3 && boundaryShapes.length !== 1) {
-      const network = buildNetworkModel(ellipseShapes, lineShapes, segments, includeNodeInteriors)
-      return {
-        app,
-        slide,
-        mode: 'network',
-        boundary: null,
-        lines: network.lines,
-        regions: network.regions,
-        nodes: network.nodes,
-        edgeCount: network.graphEdges.length,
-        faceCount: network.faceRegions.length,
-        nodeRegionCount: network.nodeRegions.length,
-        ignoredLines: network.ignoredLines,
-        scannedWholeSlide: selected.length === 0,
-        selectedCount: selected.length
+      try {
+        const network = buildNetworkModel(ellipseShapes, lineShapes, segments, includeNodeInteriors)
+        return {
+          app,
+          slide,
+          mode: 'network',
+          boundary: null,
+          lines: network.lines,
+          regions: network.regions,
+          nodes: network.nodes,
+          paths: [],
+          closedShapes: [],
+          edgeCount: network.graphEdges.length,
+          faceCount: network.faceRegions.length,
+          nodeRegionCount: network.nodeRegions.length,
+          ignoredLines: network.ignoredLines,
+          scannedWholeSlide: selected.length === 0,
+          selectedCount: selected.length
+        }
+      } catch (_) {
+        // 不满足椭圆节点线网连接规则时，继续尝试通用线稿模式。
       }
     }
 
-    if (boundaryShapes.length !== 1) {
-      throw new Error(
-        '未识别到可处理的图形。可以选中 1 个闭合外框和分割线；' +
-        '也可以取消所有选择，让插件自动扫描当前页由椭圆节点和线段组成的闭合线网。'
-      )
+    if (boundaryShapes.length === 1) {
+      try {
+        const boundary = boundaryFromShape(boundaryShapes[0], segments)
+        const lines = lineShapes.map(lineFromShape)
+        const regions = buildRegions(boundary, lines, segments)
+        return {
+          app,
+          slide,
+          mode: 'boundary',
+          boundary,
+          lines,
+          regions,
+          nodes: [],
+          paths: [],
+          closedShapes: [boundary.shape],
+          edgeCount: lines.length,
+          faceCount: regions.length,
+          nodeRegionCount: 0,
+          ignoredLines: [],
+          scannedWholeSlide: selected.length === 0,
+          selectedCount: selected.length
+        }
+      } catch (error) {
+        // 开放自由曲线不能作为单一外框；让通用线稿模式继续尝试。
+        if (getShapeType(boundaryShapes[0]) !== M.msoFreeform) throw error
+      }
     }
 
-    const boundary = boundaryFromShape(boundaryShapes[0], segments)
-    const lines = lineShapes.map(lineFromShape)
-    const regions = buildRegions(boundary, lines, segments)
+    const paths = sourceShapes.map(shape => {
+      try { return genericPathFromShape(shape, segments) } catch (_) { return null }
+    }).filter(Boolean)
+    const genericRegions = buildGenericRegions(paths)
+    const closedShapes = paths.filter(path => path.closed).map(path => path.shape)
     return {
       app,
       slide,
-      mode: 'boundary',
-      boundary,
-      lines,
-      regions,
+      mode: 'generic',
+      boundary: null,
+      lines: [],
+      regions: genericRegions,
       nodes: [],
-      edgeCount: lines.length,
-      faceCount: regions.length,
+      paths,
+      closedShapes,
+      edgeCount: paths.reduce((sum, path) => sum + Math.max(0, path.points.length - (path.closed ? 0 : 1)), 0),
+      faceCount: genericRegions.length,
       nodeRegionCount: 0,
       ignoredLines: [],
       scannedWholeSlide: selected.length === 0,
@@ -1264,6 +1509,21 @@
         ignoredLineCount: model.ignoredLines.length,
         faceCount: model.faceCount,
         nodeRegionCount: model.nodeRegionCount,
+        regionCount: model.regions.length,
+        vertexCount: model.regions.reduce((sum, poly) => sum + poly.length, 0),
+        scannedWholeSlide: model.scannedWholeSlide
+      }
+    }
+    if (model.mode === 'generic') {
+      return {
+        mode: model.mode,
+        boundaryName: '当前线稿',
+        boundaryKind: '通用线稿',
+        nodeCount: 0,
+        lineCount: model.paths.length,
+        ignoredLineCount: 0,
+        faceCount: model.faceCount,
+        nodeRegionCount: 0,
         regionCount: model.regions.length,
         vertexCount: model.regions.reduce((sum, poly) => sum + poly.length, 0),
         scannedWholeSlide: model.scannedWholeSlide
@@ -1352,6 +1612,14 @@
       if (disable) {
         model.nodes.forEach(node => {
           try { node.shape.Fill.Visible = M.msoFalse } catch (_) {}
+        })
+      }
+      return
+    }
+    if (model.mode === 'generic') {
+      if (disable) {
+        model.closedShapes.forEach(shape => {
+          try { shape.Fill.Visible = M.msoFalse } catch (_) {}
         })
       }
       return
@@ -1507,8 +1775,10 @@
       splitPolygon,
       buildRegions,
       buildPlanarRegions,
+      buildGenericRegions,
       enumerateGraphFaces,
       buildCurvedNetworkFace,
+      sampleFreeformPath,
       ellipsePointOnRay,
       polygonArea,
       polygonCentroid,
