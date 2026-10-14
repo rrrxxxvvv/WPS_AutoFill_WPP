@@ -27,11 +27,13 @@ pnpm-debug.log*
 *.dps
 *.ppt
 *.pptx
+!tests/fixtures/*.pptx
 *.pps
 *.ppsx
 *.tmp
 *.7z
 ~$*
+.codex-tmp/
 
 # Editors and IDEs
 .idea/

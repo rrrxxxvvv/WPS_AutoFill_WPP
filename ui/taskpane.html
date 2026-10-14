@@ -85,6 +85,7 @@
 
     <section class="workflow" aria-labelledby="workflow-title">
       <h2 id="workflow-title">选择填色方式</h2>
+      <p>曲边色块通过原生 PPTX 导入保持可编辑；生成时会使用并替换剪贴板内容。</p>
 
       <article class="workflow-card">
         <div class="workflow-heading">
@@ -96,8 +97,8 @@
         </div>
         <ol class="mini-steps">
           <li>点击“开始点选”，显示浅色候选区域</li>
-          <li>直接逐个点击区域，无需按 Ctrl</li>
-          <li>已选区域会加深，再点一次可取消</li>
+          <li>点击每个区域内部的圆形定位点，无需按 Ctrl</li>
+          <li>已选区域会加深，再点同一定位点可取消</li>
         </ol>
         <div class="manual-actions">
           <button id="prepare" class="secondary">1. 开始点选</button>
@@ -120,6 +121,14 @@
 
     <section id="status" class="status" aria-live="polite">请先确定识别范围，再选择手动挑选或全部填充。</section>
 
+    <section class="manage" aria-labelledby="debug-title">
+      <h2 id="debug-title">几何调试</h2>
+      <p>不生成填色块，只显示识别到的交点和交点之间的独立分段。红点是交点，蓝色是直线段，橙色是曲线段。</p>
+      <button id="geometryDebug" class="secondary full-button">显示交点与独立分段</button>
+      <button id="copyGeometryDiagnostic" class="secondary full-button">复制所选对象诊断数据</button>
+      <textarea id="geometryDiagnostic" class="diagnostic-output" rows="8" readonly hidden aria-label="对象诊断数据"></textarea>
+    </section>
+
     <section class="manage" aria-labelledby="manage-title">
       <h2 id="manage-title">管理已生成区域</h2>
       <p>先在幻灯片中选中插件生成的填色形状，再进行换色；清理操作会删除本页所有候选和已生成区域。</p>
@@ -133,22 +142,25 @@
       <summary>识别规则与使用限制</summary>
       <ul>
         <li>当前版本面向 WPS 演示桌面版。</li>
-        <li>支持矩形、圆角矩形、椭圆、常用多边形和已闭合自由形状作为外框。</li>
+        <li>从当前 PPTX 临时副本读取真实 OOXML 几何，支持标准预设形状、黄点调整值、连接符和任意多边形路径。</li>
         <li>外框模式只需选中外框，插件会自动读取当前页直线；如页面有无关直线，也可按 Ctrl 精确选中外框和需要的分割线。</li>
         <li>分割线两端应稍微伸出外框边界；当前分割线仍需使用直线。</li>
         <li>椭圆节点线网无需外框：取消所有选择后操作，插件会扫描当前页并识别所有闭合面。</li>
-        <li>多个多边形、直线和自由曲线混合时会进入通用线稿模式，并按所有交点拆分闭合区域。</li>
-        <li>自由曲线优先读取贝塞尔控制点；WPS 无法提供控制点时会按可读取节点作折线近似。</li>
+        <li>多个形状、直线和自由曲线混合时会进入通用线稿模式，并按所有交点拆分闭合区域。</li>
+        <li>自由曲线直接读取 PPTX 中的直线、圆弧及贝塞尔控制点；读取失败时停止生成，不再用外接矩形或折线猜测。</li>
         <li>线网区域由真实线段截段和节点椭圆弧构成，不再直接连接圆心。</li>
         <li>勾选“包含椭圆内部区域”后，椭圆内部也会成为可单独选择和填色的候选区域。</li>
-        <li>曲边使用高密度节点近似，标准精度通常已经看不出折角。</li>
-        <li>“开始点选”会建立浅蓝色候选层。直接逐个点击区域即可连续多选，不需要按 Ctrl。</li>
-        <li>插件会自动记录点击并取消 WPS 的矩形控制框；区域颜色加深表示已选，再点一次即可取消。</li>
+        <li>交点计算沿原始曲线参数进行；最终曲边填色块使用原贝塞尔控制点创建，不把采样点写成大量直线节点。</li>
+        <li>“开始点选”会建立浅蓝色候选层，并在每个区域内部放置圆形定位点。</li>
+        <li>请点击圆形定位点连续多选，不需要按 Ctrl；区域颜色加深表示已选，再点同一定位点即可取消。</li>
         <li>点击“完成并填充”后，未点选的候选层会自动删除。</li>
       </ul>
     </details>
   </main>
 
+  <script src="../js/vendor/jszip.min.js"></script>
+  <script src="../js/ooxml-geometry.js"></script>
+  <script src="../js/native-shape-writer.js"></script>
   <script src="../js/fill-engine.js"></script>
   <script src="../js/taskpane.js"></script>
 </body>

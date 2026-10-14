@@ -75,6 +75,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .status { margin-top: 12px; min-height: 50px; padding: 10px; border-radius: 8px; background: #eef1f5; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
 .status.ok { color: #176c3a; background: #e7f6ed; }
 .status.error { color: #9d241c; background: #fdecea; }
+.diagnostic-output { box-sizing: border-box; width: 100%; margin-top: 8px; padding: 8px; border: 1px solid #cfd6e4; border-radius: 6px; resize: vertical; font: 10px/1.35 Consolas, monospace; color: #253047; background: #f8f9fc; }
 .manage { margin-top: 12px; padding: 12px; }
 .manage p { margin: -3px 0 10px; color: #737f93; font-size: 12px; line-height: 1.5; }
 details { margin-top: 14px; color: #5f6368; font-size: 12px; }
